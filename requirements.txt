@@ -1,3 +1,11 @@
+# Framework web y servidor
 Flask==3.0.3
-openpyxl==3.1.2
 gunicorn==22.0.0
+
+# Biblioteca principal de Excel
+openpyxl==3.1.2
+
+# --- DEPENDENCIAS ADICIONALES PARA ANÁLISIS DE DATOS ---
+# Añadidas para soportar scripts más avanzados generados por la IA
+numpy==1.26.4
+pandas==2.2.2
