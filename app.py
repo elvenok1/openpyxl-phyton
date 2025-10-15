@@ -23,7 +23,7 @@ def create_excel_from_script():
         # Crear un nuevo libro de trabajo (workbook) y seleccionar la hoja activa
         wb = Workbook()
         ws = wb.active
-        ws.title = "Hoja Generada Dinámicamente"
+        ws.title = "Hoja1 Excel Genius"
 
         # Crear un diccionario para el contexto de ejecución del script
         # Le pasamos el workbook (wb) y la worksheet (ws) para que el script pueda usarlos
