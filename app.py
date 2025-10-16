@@ -1,6 +1,10 @@
 import io
 from flask import Flask, request, send_file, jsonify
 from openpyxl import Workbook
+# El script del usuario ahora podría necesitar estas importaciones,
+# por lo que el servidor ya no las "inyecta".
+# from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+# from openpyxl.chart import LineChart, Reference
 
 # --- Inicialización de la Aplicación Flask ---
 app = Flask(__name__)
@@ -9,46 +13,33 @@ app = Flask(__name__)
 @app.route('/create-excel-from-script', methods=['POST'])
 def create_excel_from_script():
     """
-    Recibe un script de Python en el cuerpo de la solicitud, lo ejecuta en un
-    contexto que tiene acceso a un libro y hoja de trabajo de openpyxl,
+    Recibe un script de Python, lo ejecuta en el ámbito local de esta función
     y devuelve el archivo Excel resultante.
+    
+    ADVERTENCIA: La ejecución de código dinámico de esta manera es riesgosa.
+    El script tendrá acceso a las variables locales 'wb' y 'ws'.
     """
     try:
-        # 1. Recibe el código completo del cuerpo de la solicitud.
-        # El método get_data() lee todo el stream antes de continuar.
         python_code = request.get_data(as_text=True)
 
         if not python_code:
             return jsonify({"error": "No se proporcionó ningún script de Python."}), 400
 
-        # Crea un nuevo libro y hoja de trabajo para cada solicitud
+        # Se crean las variables que estarán disponibles para el script ejecutado
         wb = Workbook()
         ws = wb.active
         ws.title = "Hoja1 Excel Genius"
 
-        # --- CONTEXTO DE EJECUCIÓN CONTROLADO ---
-        # Se define un diccionario que contendrá las variables y módulos
-        # disponibles para el script del usuario.
-        execution_context = {
-            'wb': wb,
-            'ws': ws,
-            # Módulos y clases de uso común de openpyxl
-            'Font': __import__('openpyxl.styles', fromlist=['Font']).Font,
-            'PatternFill': __import__('openpyxl.styles', fromlist=['PatternFill']).PatternFill,
-            'Alignment': __import__('openpyxl.styles', fromlist=['Alignment']).Alignment,
-            'Border': __import__('openpyxl.styles', fromlist=['Border']).Border,
-            'Side': __import__('openpyxl.styles', fromlist=['Side']).Side,
-            'LineChart': __import__('openpyxl.chart', fromlist=['LineChart']).LineChart,
-            'Reference': __import__('openpyxl.chart', fromlist=['Reference']).Reference,
-        }
-
-        # Ejecuta el script de Python proporcionado dentro del contexto definido
-        exec(python_code, execution_context)
+        # --- EJECUCIÓN DIRECTA ---
+        # El código se ejecuta en el ámbito actual. Tiene acceso a 'wb', 'ws',
+        # 'python_code', 'request', y cualquier otra variable local.
+        # El script del usuario ahora debe gestionar sus propias importaciones.
+        exec(python_code)
 
         # Guarda el libro de trabajo modificado en un buffer en memoria
         buffer = io.BytesIO()
         wb.save(buffer)
-        buffer.seek(0) # Regresa al inicio del buffer para la lectura
+        buffer.seek(0)
 
         # Envía el buffer como un archivo Excel para descargar
         return send_file(
