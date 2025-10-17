@@ -1,23 +1,17 @@
 import io
 from flask import Flask, request, send_file, jsonify
-from openpyxl import Workbook
-# El script del usuario ahora podría necesitar estas importaciones,
-# por lo que el servidor ya no las "inyecta".
-# from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-# from openpyxl.chart import LineChart, Reference
+# Ya no necesitamos pre-importar nada de openpyxl aquí para el agente.
 
-# --- Inicialización de la Aplicación Flask ---
 app = Flask(__name__)
 
-# --- Endpoint Principal para Ejecutar Código Openpyxl ---
-@app.route('/create-excel-from-script', methods=['POST'])
-def create_excel_from_script():
+@app.route('/process-excel', methods=['POST'])
+def process_excel():
     """
-    Recibe un script de Python, lo ejecuta en el ámbito local de esta función
-    y devuelve el archivo Excel resultante.
+    Recibe un script de Python que define una función 'generar_excel()'.
+    Ejecuta esta función, que debe devolver un objeto Workbook de openpyxl,
+    y envía el archivo Excel resultante.
     
-    ADVERTENCIA: La ejecución de código dinámico de esta manera es riesgosa.
-    El script tendrá acceso a las variables locales 'wb' y 'ws'.
+    Este enfoque es seguro en un entorno controlado y da máxima flexibilidad al agente.
     """
     try:
         python_code = request.get_data(as_text=True)
@@ -25,35 +19,39 @@ def create_excel_from_script():
         if not python_code:
             return jsonify({"error": "No se proporcionó ningún script de Python."}), 400
 
-        # Se crean las variables que estarán disponibles para el script ejecutado
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Hoja1 Excel Genius"
+        # Preparamos un diccionario de locales para la ejecución.
+        # Esto nos permite capturar la función definida por el agente.
+        local_scope = {}
+        
+        # 1. Ejecutamos el código del agente para DEFINIR la función 'generar_excel'.
+        exec(python_code, globals(), local_scope)
 
-        # --- EJECUCIÓN DIRECTA ---
-        # El código se ejecuta en el ámbito actual. Tiene acceso a 'wb', 'ws',
-        # 'python_code', 'request', y cualquier otra variable local.
-        # El script del usuario ahora debe gestionar sus propias importaciones.
-        exec(python_code)
+        # 2. Verificamos que la función fue definida.
+        if 'generar_excel' not in local_scope:
+            return jsonify({"error": "El script no definió la función 'generar_excel()'."}), 400
 
-        # Guarda el libro de trabajo modificado en un buffer en memoria
+        # 3. LLAMAMOS a la función y obtenemos el objeto workbook.
+        generar_excel_func = local_scope['generar_excel']
+        wb = generar_excel_func() # El contrato es que la función devuelve el workbook.
+
+        # 4. Guardamos el workbook en memoria y lo enviamos.
         buffer = io.BytesIO()
         wb.save(buffer)
         buffer.seek(0)
 
-        # Envía el buffer como un archivo Excel para descargar
         return send_file(
             buffer,
             as_attachment=True,
-            download_name='reporte_dinamico.xlsx',
+            download_name='resultado_excel.xlsx',
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
     except Exception as e:
-        # Captura cualquier error durante la ejecución y lo reporta
-        print(f"Error durante la ejecución del script: {e}")
-        return jsonify({"error": f"Error interno del servidor al ejecutar el script: {str(e)}"}), 500
+        # Captura cualquier error, tanto en 'exec' como en la llamada a la función.
+        error_message = f"Error durante la ejecución del script: {type(e).__name__}: {e}"
+        print(error_message)
+        # Devolvemos un error 500 con el mensaje para facilitar el debug.
+        return jsonify({"error": error_message}), 500
 
 if __name__ == '__main__':
-    # Ejecuta la aplicación Flask
     app.run(debug=True, port=5001)
